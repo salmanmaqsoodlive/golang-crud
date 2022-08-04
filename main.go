@@ -12,12 +12,21 @@ import (
 	"time"
 
 	age "github.com/bearbin/go-age"
-	_ "github.com/go-sql-driver/mysql"
+	// _ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
+	_ "github.com/lib/pq"
 	"github.com/rs/cors"
 )
 
 var db *sql.DB 
+
+const (
+	host = "ec2-34-253-119-24.eu-west-1.compute.amazonaws.com"
+	port = "5432"
+	user = "kchiduwjmrugzz"
+	password = "f2c55181c53484e8c6593e811bdf9b675f6f206c2f322a8f8f46e0d2fd553a9b"
+	dbname = "dcgn7ehlnlj5sq"
+)
 
 //PERSON STRUCTURE
 type Person struct {
@@ -93,7 +102,7 @@ func getPerson(w http.ResponseWriter, r *http.Request){
 	params := mux.Vars(r)
 	var person Person
     // Query for a value based on a single row.
-     err := db.QueryRow("SELECT * from persons where id = ?",params["id"]).Scan(&person.Id, &person.FirstName,&person.LastName,&person.Address,&person.Dob,&person.Image)
+     err := db.QueryRow("SELECT * from persons where id = $1",params["id"]).Scan(&person.Id, &person.FirstName,&person.LastName,&person.Address,&person.Dob,&person.Image)
 	 if err != nil {
 		log.Fatal(err)
 	}
@@ -119,12 +128,13 @@ func createPerson(w http.ResponseWriter, r *http.Request){
 /* 	calculatedAge :=getDOB(person.Dob)
 	fmt.Println("_____________","_________________",calculatedAge)
 person.Age = age.Age(calculatedAge) */
+insertSqlStatement := "INSERT INTO persons (firstName,lastName,dob,image,address) VALUES ($1, $2, $3, $4, $5) "
 
-	res, err := db.Exec("INSERT INTO persons(firstName,lastName,dob,image,address) VALUES (?,?,?,?,?)",person.FirstName,person.LastName,person.Dob,person.Image,person.Address)
+	_, err := db.Exec(insertSqlStatement,person.FirstName,person.LastName,person.Dob,person.Image,person.Address)
 if err != nil {
 	log.Fatal(err)
 }
-lastId, err := res.LastInsertId()
+// lastId, err := res.LastInsertId()
 if err != nil {
 	log.Fatal(err)
 }
@@ -132,7 +142,7 @@ if err != nil {
 if err != nil {
 	log.Fatal(err)
 } */
-person.Id=lastId
+// person.Id=lastId
 // log.Printf("ID = %d, affected = %d\n", lastId, rowCnt)
 
 json.NewEncoder(w).Encode(&person) 
@@ -153,13 +163,15 @@ func updatePerson(w http.ResponseWriter, r *http.Request){
 		fmt.Println(err.Error())
 	}
 	defer insert.Close()
+
+	json.NewEncoder(w).Encode("Person Updated Successfully") 
 }
 
 //DELETE SINGLE PERSON
 func deletePerson(w http.ResponseWriter, r *http.Request)  {
 	w.Header().Set("Content-Type","application/json")
 	params := mux.Vars(r)
-	result, err := db.Exec("delete from persons where id = ?", params["id"])
+	result, err := db.Exec("Delete from persons where id=$1", params["id"])
 	if err != nil {
 		// return 0
 	} 
@@ -175,15 +187,26 @@ json.NewEncoder(w).Encode("Person Deleted Successfully")
 
 }
 
-func main(){
-	port := os.Getenv("PORT")
+func CheckError(err error){
+	if err != nil {
+		panic(err)
+	}
+}
 
-	tempDB, err := sql.Open("mysql", "root:S@lman005@tcp(127.0.0.1:3306)/persondb")
+func main(){
+	// port := os.Getenv("PORT")
+	// port1 := "8000"
+	psqlconn := fmt.Sprintf("postgresql://%s:%s@%s:%s/%s", user,password,host,port,dbname)
+	// psqlconn := fmt.Sprintf("host = %s port = %d user= %s password= %s dbname = %s sslmode=disable",host,port,user,password,dbname)
+
+	tempDB,err := sql.Open("postgres",psqlconn)
+	CheckError(err)
+
+
+	// tempDB, err := sql.Open("mysql", "root:S@lman005@tcp(127.0.0.1:3306)/persondb")
 	db = tempDB
 
-	if err != nil {
-		panic(err.Error())
-	}
+	CheckError(err)
 
 	// defer db.Close()
 
@@ -214,7 +237,11 @@ func main(){
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 	})
 	handler := c.Handler(r)
+	port1 := os.Getenv("PORT")
+	if port1 == ""{
+		port1 = "8000"
+	}
 
 	//RUN THE SERVER	
-	log.Fatal(http.ListenAndServe(":"+port, handler))
+	log.Fatal(http.ListenAndServe(":" +port1, handler))
 }
