@@ -103,8 +103,12 @@ func getPerson(w http.ResponseWriter, r *http.Request){
 	var person Person
     // Query for a value based on a single row.
      err := db.QueryRow("SELECT * from persons where id = $1",params["id"]).Scan(&person.Id, &person.FirstName,&person.LastName,&person.Address,&person.Dob,&person.Image)
+
 	 if err != nil {
-		log.Fatal(err)
+		// fmt.Println("in if",err)
+	
+		w.WriteHeader(404) // Return 500 Internal Server Error.
+		return
 	}
 	calculatedAge :=getDOB(person.Dob)
 	person.Age = age.Age(calculatedAge) 
